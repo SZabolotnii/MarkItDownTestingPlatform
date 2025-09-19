@@ -70,7 +70,7 @@ class ProcessingRequest:
     file_metadata: JSONDict
     gemini_api_key: Optional[str] = None
     analysis_type: str = "quality_analysis"
-    model_preference: str = "gemini-1.5-pro"
+    model_preference: str = GeminiModel.PRO.value
     enable_plugins: bool = False
     azure_endpoint: Optional[str] = None
     session_context: JSONDict = field(default_factory=dict)
@@ -316,7 +316,7 @@ class DocumentProcessingOrchestrator:
             analysis_request = AnalysisRequest(
                 content=conversion_result.content,
                 analysis_type=AnalysisType(request.analysis_type),
-                model=GeminiModel(request.model_preference)
+                model=GeminiModel.from_str(request.model_preference)
             )
             
             analysis_result = await engine.analyze_content(analysis_request)
@@ -645,10 +645,13 @@ class MarkItDownTestingApp:
                     
                     model_preference = gr.Dropdown(
                         choices=[
-                            ("Gemini 1.5 Pro (Best Quality)", "gemini-1.5-pro"),
-                            ("Gemini 1.5 Flash (Faster)", "gemini-1.5-flash")
+                            ("Gemini 2.0 Pro (Advanced Reasoning)", GeminiModel.PRO.value),
+                            ("Gemini 2.0 Flash (Fast Inference)", GeminiModel.FLASH.value),
+                            ("Gemini 2.5 Flash (Enhanced Quality)", GeminiModel.FLASH_25.value),
+                            ("Gemini 1.5 Pro (Legacy)", GeminiModel.LEGACY_PRO.value),
+                            ("Gemini 1.5 Flash (Legacy)", GeminiModel.LEGACY_FLASH.value)
                         ],
-                        value="gemini-1.5-pro",
+                        value=GeminiModel.PRO.value,
                         label="AI Model Preference"
                     )
                 

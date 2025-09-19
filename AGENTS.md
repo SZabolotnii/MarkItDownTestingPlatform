@@ -83,8 +83,8 @@ class GeminiConnector:
     def __init__(self, api_key=None):
         self.client = self._init_gemini_client(api_key)
         self.models = {
-            'analysis': 'gemini-1.5-pro',
-            'summary': 'gemini-1.5-flash',
+            'analysis': 'gemini-2.0-pro-exp',
+            'summary': 'gemini-2.0-flash-exp',
             'vision': 'gemini-1.5-pro-vision'
         }
     
@@ -376,7 +376,7 @@ def create_analysis_visualization(analysis_results):
 ```txt
 gradio>=4.0.0
 markitdown[all]>=0.1.0
-google-generativeai>=0.3.0
+google-genai>=0.1.0
 plotly>=5.0.0
 python-multipart>=0.0.6
 aiofiles>=22.0.0

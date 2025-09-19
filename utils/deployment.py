@@ -169,7 +169,7 @@ class SystemHealthChecker:
         required_packages = [
             'gradio',
             'markitdown',
-            'google-generativeai',
+            'google-genai',
             'plotly',
             'pandas',
             'numpy',
@@ -412,7 +412,7 @@ class DeploymentValidator:
                     requirements = f.read()
                 
                 # Check for essential packages
-                essential_packages = ['gradio', 'markitdown', 'google-generativeai']
+                essential_packages = ['gradio', 'markitdown', 'google-genai']
                 for package in essential_packages:
                     if package in requirements:
                         validation_results['checks'][f'req_{package}'] = True

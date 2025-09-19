@@ -26,7 +26,6 @@ from contextlib import asynccontextmanager
 
 import aiofiles
 from markitdown import MarkItDown
-import google.generativeai as genai
 from tenacity import retry, stop_after_attempt, wait_exponential
 try:
     import magic

@@ -6,7 +6,7 @@ gradio>=4.0.0,<5.0.0                    # UI framework - pinned major version fo
 markitdown[all]>=0.1.0                # Microsoft's document conversion engine
 
 # LLM Integration - Gemini Focus
-google-generativeai>=0.3.0,<1.0.0       # Google Gemini API client
+google-genai>=0.1.0                     # Google Gemini API client (latest)
 google-auth>=2.0.0                      # Authentication for Google services
 
 # Data Processing & Visualization
