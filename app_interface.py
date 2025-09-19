@@ -552,7 +552,7 @@ class MarkItDownTestingApp:
                                 ("Content Summary - Тематичний аналіз та ключові інсайти", "content_summary"),
                                 ("Extraction Quality - Оцінка збереження даних", "extraction_quality"),
                             ],
-                            value="quality_analysis",
+                            value="content_summary",
                             label="Analysis Type",
                             interactive=True,
                         )
@@ -565,7 +565,7 @@ class MarkItDownTestingApp:
                                 ("Gemini 1.5 Pro (Legacy)", GeminiModel.LEGACY_PRO.value),
                                 ("Gemini 1.5 Flash (Legacy)", GeminiModel.LEGACY_FLASH.value),
                             ],
-                            value=GeminiModel.PRO.value,
+                            value=GeminiModel.FLASH.value,
                             label="AI Model Preference",
                             interactive=True,
                         )
@@ -585,20 +585,6 @@ class MarkItDownTestingApp:
 
             with gr.Column(scale=2):
                 gr.Markdown("### 📊 Processing Results")
-                
-                # 🚨 ДОДАНО ВАЖЛИВЕ ПОВІДОМЛЕННЯ ПРО ВИПРАВЛЕННЯ
-                gr.HTML("""
-                <div style="background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #0c5460;">🔧 Architectural Fix Applied</h4>
-                    <p style="margin: 0; color: #0c5460;"><strong>Fixed Issue:</strong> Different analysis types now show different results in Markdown Output!</p>
-                    <ul style="margin: 10px 0 0 20px; color: #0c5460;">
-                        <li><strong>Quality Analysis:</strong> Shows detailed quality metrics and AI feedback</li>
-                        <li><strong>Structure Review:</strong> Shows document structure analysis and organization</li>
-                        <li><strong>Content Summary:</strong> Shows thematic analysis and key insights</li>
-                        <li><strong>Extraction Quality:</strong> Shows data preservation assessment</li>
-                    </ul>
-                </div>
-                """)
                 
                 status_display = gr.HTML()
 

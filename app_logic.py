@@ -38,8 +38,8 @@ class ProcessingRequest:
     file_content: bytes
     file_metadata: JSONDict
     gemini_api_key: Optional[str] = None
-    analysis_type: str = AnalysisType.QUALITY_ANALYSIS.value
-    model_preference: str = GeminiModel.PRO.value
+    analysis_type: str = AnalysisType.CONTENT_SUMMARY.value
+    model_preference: str = GeminiModel.FLASH.value
     use_llm: bool = False
     enable_plugins: bool = False
     azure_endpoint: Optional[str] = None

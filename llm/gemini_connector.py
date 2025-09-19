@@ -155,7 +155,7 @@ class GeminiAnalysisEngine:
     ANALYSIS_PROMPTS = {
         AnalysisType.QUALITY_ANALYSIS: {
             "system": """You are an expert document conversion analyst specializing in evaluating 
-            the quality of document-to-Markdown conversions.""",
+            the quality of document-to-Markdown conversions (use the language of the original document).""",
             "template": """
             Analyze the quality of this Markdown conversion from a document.
             
@@ -187,7 +187,7 @@ class GeminiAnalysisEngine:
         
         AnalysisType.STRUCTURE_REVIEW: {
             "system": """You are a document structure specialist analyzing Markdown 
-            document organization and hierarchy.""",
+            document organization and hierarchy (use the language of the original document).""",
             "template": """
             Conduct a comprehensive structural analysis of this Markdown document.
             
@@ -219,7 +219,7 @@ class GeminiAnalysisEngine:
         
         AnalysisType.CONTENT_SUMMARY: {
             "system": """You are a content analysis expert specializing in document 
-            summarization and thematic analysis.""",
+            summarization and thematic analysis (use the language of the original document).""",
             "template": """
             Create a comprehensive content summary and thematic analysis of this document.
             
@@ -251,7 +251,7 @@ class GeminiAnalysisEngine:
         
         AnalysisType.EXTRACTION_QUALITY: {
             "system": """You are a data extraction quality specialist evaluating how well 
-            information was preserved during document conversion.""",
+            information was preserved during document conversion (use the language of the original document).""",
             "template": """
             Evaluate the extraction quality and information preservation in this converted document.
             
