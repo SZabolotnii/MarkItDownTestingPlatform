@@ -556,6 +556,13 @@ class MarkItDownTestingApp:
                 },
             )
 
+            logger.info(
+                "Queued processing request | LLM: %s | Analysis type input: %s | Model: %s",
+                llm_enabled,
+                analysis_type,
+                model_preference,
+            )
+
             processing_response = await self.orchestrator.process_document(processing_request)
             updated_state = current_state.add_processing_result(processing_response)
 
