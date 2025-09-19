@@ -1,8 +1,20 @@
+---
+title: MarkItDownTestingPlatform
+emoji: 📊
+colorFrom: pink
+colorTo: gray
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
+pinned: false
+short_description: Enterprise-Grade Document Conversion Testing with AI-Powered
+---
+
 # 🚀 MarkItDown Testing Platform
 
 **Enterprise-Grade Document Conversion Testing with AI-Powered Analysis**
 
-[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/your-username/markitdown-testing-platform)
+[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/DocSA/MarkItDownTestingPlatform)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -23,7 +35,7 @@ A comprehensive testing platform for Microsoft's MarkItDown document conversion 
 
 ### Using the Hugging Face Space
 
-1. **Visit the Space**: [MarkItDown Testing Platform](https://huggingface.co/spaces/your-username/markitdown-testing-platform)
+1. **Visit the Space**: [MarkItDown Testing Platform](https://huggingface.co/spaces/DocSA/MarkItDownTestingPlatform)
 2. **Upload Document**: Drag & drop or select your document
 3. **Configure Analysis**: Enter Gemini API key for AI analysis (optional)
 4. **Process**: Click "Process Document" and review results
@@ -78,11 +90,11 @@ A comprehensive testing platform for Microsoft's MarkItDown document conversion 
 
 ### Key Dependencies
 ```python
-gradio>=4.0.0                    # UI framework
-markitdown[all]>=0.1.0         # Document conversion
-google-genai>=0.1.0             # Gemini integration (new client)  
-plotly>=5.17.0                   # Interactive visualizations
-pandas>=1.5.0                    # Data processing
+gradio>=4.44.0                  # Gradio interface (HF Spaces compatible)
+markitdown[all]>=0.1.0          # Microsoft conversion engine
+google-genai>=1.0.0             # Gemini integration (new client)
+plotly>=5.17.0                  # Interactive visualizations
+pandas>=1.5.0                   # Data processing
 ```
 
 ## 📊 Analysis Capabilities
@@ -163,6 +175,28 @@ export GRADIO_TEMP_DIR="/tmp"
 export MAX_FILE_SIZE="52428800"  # 50MB in bytes
 export PROCESSING_TIMEOUT="300"  # 5 minutes
 ```
+
+### Deploying to Hugging Face Spaces
+
+1. **Створіть Space**
+   - Відкрийте [huggingface.co/spaces/new](https://huggingface.co/spaces/new)
+   - Оберіть SDK **Gradio**, назву `DocSA/MarkItDownTestingPlatform`, runtime **Python 3.11**
+   - `app_file` має залишатися `app.py`
+
+2. **Запуште код**
+   ```bash
+   git remote add hf https://huggingface.co/spaces/DocSA/MarkItDownTestingPlatform
+   git push hf main
+   ```
+
+3. **Налаштуйте секрети та змінні середовища**
+   - Додайте секрет `GEMINI_API_KEY` (Settings → Repository secrets → Add)
+   - Додаткові змінні (не секретні): `MAX_FILE_SIZE_MB=50`, `PROCESSING_TIMEOUT=300`, `APP_VERSION=2.0.0-enterprise`
+
+4. **Особливості рантайму**
+   - Gemini-аналіз вимкнений за замовчуванням; користувач активує його вручну
+   - Стандартні налаштування: тип аналізу **Content Summary**, модель **Gemini 2.0 Flash**
+   - Обмеження квот Gemini обробляються автоматичними fallback-моделями
 
 ## 📚 API Reference
 
