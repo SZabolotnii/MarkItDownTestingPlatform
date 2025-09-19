@@ -1,4 +1,4 @@
-"""Gradio interface assembly for the MarkItDown Testing Platform."""
+"""Gradio interface assembly for the MarkItDown Testing Platform - ВИПРАВЛЕНА ВЕРСІЯ."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ class ApplicationState:
 
 
 class GradioResponseFactory:
-    """Creates UI-ready artifacts from processing results."""
+    """Creates UI-ready artifacts from processing results - ВИПРАВЛЕНА ВЕРСІЯ з правильною логікою відображення."""
 
     def __init__(self, viz_engine: InteractiveVisualizationEngine) -> None:
         self.viz_engine = viz_engine
@@ -73,6 +73,14 @@ class GradioResponseFactory:
     def create_success_response(
         self, response: ProcessingResponse
     ) -> Tuple[str, str, str, JSONDict]:
+        """
+        🚨 ВИПРАВЛЕНА ЛОГІКА: Правильне відображення результатів залежно від analysis_type
+        
+        Strategic Architecture Decision:
+        - Показуємо AI analysis результат якщо доступний та успішний
+        - Різні analysis_type режими показують різні форматовані результати
+        - Graceful fallback до base conversion якщо AI недоступний
+        """
         processing_time = response.conversion_result.processing_time or 0
         content_length = len(response.conversion_result.content)
 
@@ -97,7 +105,45 @@ class GradioResponseFactory:
         """
 
         original_preview = self._generate_document_preview(response.conversion_result.metadata)
-        markdown_content = response.conversion_result.content
+        
+        # 🚨 КРИТИЧНЕ ВИПРАВЛЕННЯ: Правильна логіка вибору контенту для відображення
+        if response.analysis_result and response.analysis_result.success:
+            # Показуємо AI-обробний результат залежно від analysis_type
+            analysis_type_value = response.analysis_result.analysis_type.value
+            ai_content = response.analysis_result.content
+            
+            status_html += f"""
+            <div style="background: #e8f5e8; border: 1px solid #4caf50; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                <strong>🤖 AI Analysis Active:</strong> {analysis_type_value.replace('_', ' ').title()}<br/>
+                <strong>Model Used:</strong> {response.analysis_result.model_used.value}<br/>
+                <strong>Processing Time:</strong> {response.analysis_result.processing_time:.2f}s
+            </div>
+            """
+            
+            if analysis_type_value == "quality_analysis":
+                markdown_content = self._format_quality_analysis(ai_content)
+            elif analysis_type_value == "structure_review":
+                markdown_content = self._format_structure_analysis(ai_content)
+            elif analysis_type_value == "content_summary":
+                markdown_content = self._format_content_summary(ai_content)
+            elif analysis_type_value == "extraction_quality":
+                markdown_content = self._format_extraction_analysis(ai_content)
+            else:
+                # Fallback до formatted AI result
+                markdown_content = self._format_generic_ai_result(ai_content)
+                
+        else:
+            # Fallback до базової конвертації якщо AI недоступний або неуспішний
+            markdown_content = response.conversion_result.content
+            
+            if response.analysis_result and not response.analysis_result.success:
+                status_html += f"""
+                <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                    <strong>⚠️ AI Analysis Failed:</strong> {response.analysis_result.error_message}<br/>
+                    <strong>Showing Base Conversion</strong>
+                </div>
+                """
+        
         quick_metrics = self._extract_summary_metrics(response)
 
         return (
@@ -106,6 +152,216 @@ class GradioResponseFactory:
             markdown_content,
             quick_metrics,
         )
+
+    def _format_quality_analysis(self, ai_content: Dict) -> str:
+        """Форматує результати Quality Analysis для UI display"""
+        
+        markdown = f"""# 📊 Quality Analysis Results
+
+## Overall Assessment
+**Quality Score**: {ai_content.get('overall_score', 'N/A')}/10
+
+## Detailed Metrics
+- **Structure Score**: {ai_content.get('structure_score', 'N/A')}/10 - Збереження заголовків, списків, таблиць
+- **Completeness Score**: {ai_content.get('completeness_score', 'N/A')}/10 - Повнота інформації з оригіналу  
+- **Accuracy Score**: {ai_content.get('accuracy_score', 'N/A')}/10 - Точність передачі форматування
+- **Readability Score**: {ai_content.get('readability_score', 'N/A')}/10 - Оптимізація для AI-споживання
+
+## 🤖 AI Analysis Feedback
+{ai_content.get('detailed_feedback', 'No detailed feedback available')}
+
+## 💡 Recommendations
+"""
+        
+        recommendations = ai_content.get('recommendations', [])
+        if recommendations:
+            for i, rec in enumerate(recommendations, 1):
+                markdown += f"{i}. {rec}\n"
+        else:
+            markdown += "No specific recommendations available.\n"
+        
+        # Додаємо detected elements якщо доступні
+        detected_elements = ai_content.get('detected_elements', {})
+        if detected_elements:
+            markdown += f"""
+## 🔍 Detected Document Elements
+"""
+            for element, count in detected_elements.items():
+                markdown += f"- **{element.replace('_', ' ').title()}**: {count}\n"
+        
+        return markdown
+
+    def _format_structure_analysis(self, ai_content: Dict) -> str:
+        """Форматує результати Structure Review для UI display"""
+        
+        markdown = f"""# 🏗️ Document Structure Analysis
+
+## Document Outline
+```
+{ai_content.get('document_outline', 'No outline available')}
+```
+
+## Heading Analysis
+"""
+        
+        heading_analysis = ai_content.get('heading_analysis', {})
+        if heading_analysis:
+            for level, count in heading_analysis.items():
+                markdown += f"- **{level}**: {count} occurrences\n"
+        else:
+            markdown += "No heading analysis available\n"
+
+        markdown += f"""
+## Organization Score
+**Structure Quality**: {ai_content.get('organization_score', 'N/A')}/10
+
+## List Analysis
+"""
+        
+        list_analysis = ai_content.get('list_analysis', {})
+        if list_analysis:
+            markdown += f"- **Total Lists**: {list_analysis.get('total_lists', 0)}\n"
+            markdown += f"- **Nested Lists**: {list_analysis.get('nested_lists', 0)}\n"
+            markdown += f"- **List Items**: {list_analysis.get('total_items', 0)}\n"
+        
+        markdown += f"""
+## Table Analysis  
+"""
+        
+        table_analysis = ai_content.get('table_analysis', {})
+        if table_analysis:
+            markdown += f"- **Total Tables**: {table_analysis.get('table_count', 0)}\n"
+            markdown += f"- **Table Quality**: {table_analysis.get('formatting_quality', 'N/A')}\n"
+        
+        markdown += f"""
+## 💡 Structure Recommendations
+"""
+        
+        recommendations = ai_content.get('structure_recommendations', [])
+        if recommendations:
+            for i, rec in enumerate(recommendations, 1):
+                markdown += f"{i}. {rec}\n"
+        else:
+            markdown += "Document structure is well-organized.\n"
+            
+        return markdown
+
+    def _format_content_summary(self, ai_content: Dict) -> str:
+        """Форматує результати Content Summary для UI display"""
+        
+        markdown = f"""# 📝 Content Summary & Analysis
+
+## Executive Summary
+{ai_content.get('executive_summary', 'No summary available')}
+
+## Main Topics
+"""
+        
+        topics = ai_content.get('main_topics', [])
+        if topics:
+            for topic in topics:
+                markdown += f"- {topic}\n"
+        else:
+            markdown += "No main topics identified\n"
+        
+        markdown += f"""
+## Document Classification
+"""
+        
+        classification = ai_content.get('document_classification', {})
+        if classification:
+            markdown += f"- **Type**: {classification.get('type', 'Unknown')}\n"
+            markdown += f"- **Purpose**: {classification.get('purpose', 'Unknown')}\n"
+            markdown += f"- **Target Audience**: {classification.get('audience', 'Unknown')}\n"
+
+        markdown += f"""
+## Content Quality Score
+**Information Value**: {ai_content.get('content_quality', 'N/A')}/10
+
+## Key Information
+"""
+        
+        key_info = ai_content.get('key_information', [])
+        if key_info:
+            for info in key_info:
+                markdown += f"- {info}\n"
+        else:
+            markdown += "No key information extracted\n"
+        
+        # Додаємо content metrics якщо доступні
+        content_metrics = ai_content.get('content_metrics', {})
+        if content_metrics:
+            markdown += f"""
+## Content Metrics
+- **Word Count**: {content_metrics.get('word_count', 'N/A')}
+- **Complexity Level**: {content_metrics.get('complexity_level', 'N/A')}
+"""
+            
+        return markdown
+
+    def _format_extraction_analysis(self, ai_content: Dict) -> str:
+        """Форматує результати Extraction Quality для UI display"""
+        
+        markdown = f"""# 🔍 Extraction Quality Assessment
+
+## Overall Extraction Score
+**Quality Rating**: {ai_content.get('extraction_score', 'N/A')}/10
+
+## Data Accuracy Assessment
+{ai_content.get('data_accuracy', 'No accuracy assessment available')}
+
+## Context Preservation
+**Meaning Retention**: {ai_content.get('context_preservation', 'No context analysis available')}
+
+## Formatting Quality
+**Original Structure**: {ai_content.get('formatting_quality', 'No formatting analysis available')}
+
+## Completeness Indicators
+{ai_content.get('completeness_indicators', 'No completeness data available')}
+
+## Conversion Artifacts
+"""
+        
+        artifacts = ai_content.get('conversion_artifacts', [])
+        if artifacts:
+            for artifact in artifacts:
+                markdown += f"- ⚠️ {artifact}\n"
+        else:
+            markdown += "✅ No conversion artifacts detected\n"
+
+        markdown += f"""
+## 💡 Quality Recommendations
+"""
+        
+        recommendations = ai_content.get('quality_recommendations', [])
+        if recommendations:
+            for i, rec in enumerate(recommendations, 1):
+                markdown += f"{i}. {rec}\n"
+        else:
+            markdown += "Extraction quality is satisfactory.\n"
+        
+        # Додаємо confidence level
+        confidence = ai_content.get('confidence_level', 'N/A')
+        markdown += f"""
+## Analysis Confidence
+**Confidence Level**: {confidence}
+"""
+            
+        return markdown
+
+    def _format_generic_ai_result(self, ai_content: Dict) -> str:
+        """Generic formatter для невідомих analysis types"""
+        
+        markdown = f"""# 🤖 AI Analysis Results
+
+## Analysis Output
+```json
+{ai_content}
+```
+
+*This analysis type uses a generic formatter. Consider adding specific formatting for better readability.*
+"""
+        return markdown
 
     def create_error_response(
         self, error_message: str, error_context: Optional[JSONDict] = None
@@ -291,14 +547,15 @@ class MarkItDownTestingApp:
                     with gr.Group(visible=llm_enabled_by_default) as llm_controls:
                         analysis_type = gr.Dropdown(
                             choices=[
-                                ("Quality Analysis", "quality_analysis"),
-                                ("Structure Review", "structure_review"),
-                                ("Content Summary", "content_summary"),
-                                ("Extraction Quality", "extraction_quality"),
+                                ("Quality Analysis - Комплексна оцінка якості конвертації", "quality_analysis"),
+                                ("Structure Review - Фокус на збереження ієрархії документа", "structure_review"),
+                                ("Content Summary - Тематичний аналіз та ключові інсайти", "content_summary"),
+                                ("Extraction Quality - Оцінка збереження даних", "extraction_quality"),
                             ],
                             value="quality_analysis",
                             label="Analysis Type",
                             interactive=True,
+                            info="🚨 ВИПРАВЛЕНО: Тепер різні режими показуватимуть різні результати!"
                         )
 
                         model_preference = gr.Dropdown(
@@ -329,6 +586,21 @@ class MarkItDownTestingApp:
 
             with gr.Column(scale=2):
                 gr.Markdown("### 📊 Processing Results")
+                
+                # 🚨 ДОДАНО ВАЖЛИВЕ ПОВІДОМЛЕННЯ ПРО ВИПРАВЛЕННЯ
+                gr.HTML("""
+                <div style="background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 10px 0; color: #0c5460;">🔧 Architectural Fix Applied</h4>
+                    <p style="margin: 0; color: #0c5460;"><strong>Fixed Issue:</strong> Different analysis types now show different results in Markdown Output!</p>
+                    <ul style="margin: 10px 0 0 20px; color: #0c5460;">
+                        <li><strong>Quality Analysis:</strong> Shows detailed quality metrics and AI feedback</li>
+                        <li><strong>Structure Review:</strong> Shows document structure analysis and organization</li>
+                        <li><strong>Content Summary:</strong> Shows thematic analysis and key insights</li>
+                        <li><strong>Extraction Quality:</strong> Shows data preservation assessment</li>
+                    </ul>
+                </div>
+                """)
+                
                 status_display = gr.HTML()
 
                 with gr.Tabs():
@@ -336,6 +608,7 @@ class MarkItDownTestingApp:
                         original_preview = gr.HTML()
 
                     with gr.TabItem("📝 Markdown Output"):
+                        gr.Markdown("**Результати обробки будуть показані тут з урахуванням обраного Analysis Type**")
                         markdown_output = gr.Code(
                             language="markdown",
                             show_label=False,
@@ -437,6 +710,7 @@ class MarkItDownTestingApp:
             <p>Built with enterprise-grade architecture principles |
             <a href=\"https://github.com/microsoft/markitdown\">Microsoft MarkItDown</a> |
             <a href=\"https://ai.google.dev/\">Google Gemini</a></p>
+            <p><strong>🔧 Critical Fix Applied:</strong> Different analysis types now show different results!</p>
         </div>
         """
         )
@@ -863,7 +1137,7 @@ def main() -> None:
 
 __all__ = [
     "ApplicationFactory",
-    "MarkItDownTestingApp",
+    "MarkItDownTestingApp", 
     "GradioResponseFactory",
     "ApplicationState",
     "create_gradio_app",
