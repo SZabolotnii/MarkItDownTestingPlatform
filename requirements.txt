@@ -1,0 +1,43 @@
+# MarkItDown Testing Platform - HF Spaces Optimized Dependencies
+# Strategic dependency selection for enterprise-grade reliability
+
+# Core Framework Dependencies
+gradio>=4.0.0,<5.0.0                    # UI framework - pinned major version for stability
+markitdown[all]>=0.1.0                # Microsoft's document conversion engine
+
+# LLM Integration - Gemini Focus
+google-generativeai>=0.3.0,<1.0.0       # Google Gemini API client
+google-auth>=2.0.0                      # Authentication for Google services
+
+# Data Processing & Visualization
+plotly>=5.17.0,<6.0.0                   # Interactive visualizations
+pandas>=1.5.0,<3.0.0                    # Data manipulation and analysis
+numpy>=1.21.0,<2.0.0                    # Numerical computing foundation
+
+# Async Processing & File Handling
+aiofiles>=22.0.0                        # Async file operations
+python-multipart>=0.0.6                 # Multipart form data handling
+async-timeout>=4.0.0                  # Timeout management for async operations
+
+# Image Processing (for multimodal capabilities)
+Pillow>=9.0.0,<11.0.0                   # Image processing library
+python-magic>=0.4.27                    # File type detection
+
+# Utilities & Performance
+pydantic>=2.0.0,<3.0.0                  # Data validation and settings management
+python-dotenv>=1.0.0                    # Environment variable management
+tenacity>=8.0.0                         # Retry mechanisms for API calls
+
+# Optional Dependencies for Advanced Features
+openpyxl>=3.1.0                         # Excel file processing
+python-docx>=0.8.11                     # Word document processing
+PyPDF2>=3.0.0                           # PDF processing backup
+
+# Security & Monitoring (Production considerations)
+cryptography>=41.0.0                    # Secure API key handling
+psutil>=5.9.0                           # System resource monitoring
+
+# Development & Testing Dependencies
+pytest>=7.0.0                           # Testing framework
+black>=23.0.0                           # Code formatting
+flake8>=6.0.0                           # Code linting
