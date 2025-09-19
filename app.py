@@ -25,6 +25,7 @@ from abc import ABC, abstractmethod
 import gradio as gr
 from pathlib import Path
 from pydantic import JsonValue
+from dotenv import load_dotenv
 
 # Strategic import organization - dependency layers clearly defined
 from core.modules import (
@@ -39,6 +40,11 @@ from visualization.analytics_engine import (
     InteractiveVisualizationEngine, QualityMetricsCalculator,
     VisualizationConfig, ReportGenerator
 )
+
+
+# Load environment configuration early for downstream components
+load_dotenv()
+DEFAULT_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 # Configure enterprise-grade logging
 logging.basicConfig(
@@ -71,6 +77,7 @@ class ProcessingRequest:
     gemini_api_key: Optional[str] = None
     analysis_type: str = "quality_analysis"
     model_preference: str = GeminiModel.PRO.value
+    use_llm: bool = False
     enable_plugins: bool = False
     azure_endpoint: Optional[str] = None
     session_context: JSONDict = field(default_factory=dict)
@@ -213,7 +220,11 @@ class DocumentProcessingOrchestrator:
         self.processing_count += 1
         
         try:
-            logger.info(f"Starting document processing - Session: {request.session_context.get('session_id', 'unknown')}")
+            logger.info(
+                "Starting document processing - Session: %s | LLM Enabled: %s",
+                request.session_context.get('session_id', 'unknown'),
+                request.use_llm
+            )
             
             # Phase 1: Document Ingestion and Validation
             conversion_result = await self._execute_conversion_pipeline(request)
@@ -540,6 +551,7 @@ class MarkItDownTestingApp:
         self.app_state = initial_state or ApplicationState(
             session_id=datetime.now().isoformat()
         )
+        self.default_gemini_key = DEFAULT_GEMINI_API_KEY
         
         # Application configuration
         self.config = {
@@ -625,35 +637,55 @@ class MarkItDownTestingApp:
                 
                 # Processing configuration
                 with gr.Accordion("🔧 Processing Configuration", open=True):
-                    gemini_api_key = gr.Textbox(
-                        label="Gemini API Key (Optional)",
-                        type="password",
-                        placeholder="Enter your Google Gemini API key for AI analysis...",
-                        info="Leave empty for basic conversion only"
+                    llm_enabled_by_default = bool(self.default_gemini_key)
+
+                    enable_llm = gr.Checkbox(
+                        label="Enable Gemini AI Analysis",
+                        value=llm_enabled_by_default,
+                        info="Toggle to include Gemini-powered analysis in the processing pipeline"
                     )
-                    
-                    analysis_type = gr.Dropdown(
-                        choices=[
-                            ("Quality Analysis", "quality_analysis"),
-                            ("Structure Review", "structure_review"),
-                            ("Content Summary", "content_summary"),
-                            ("Extraction Quality", "extraction_quality")
-                        ],
-                        value="quality_analysis",
-                        label="Analysis Type"
+
+                    llm_status = gr.Markdown(
+                        value=self._build_llm_status_message(
+                            llm_enabled_by_default,
+                            bool(self.default_gemini_key)
+                        )
                     )
-                    
-                    model_preference = gr.Dropdown(
-                        choices=[
-                            ("Gemini 2.0 Pro (Advanced Reasoning)", GeminiModel.PRO.value),
-                            ("Gemini 2.0 Flash (Fast Inference)", GeminiModel.FLASH.value),
-                            ("Gemini 2.5 Flash (Enhanced Quality)", GeminiModel.FLASH_25.value),
-                            ("Gemini 1.5 Pro (Legacy)", GeminiModel.LEGACY_PRO.value),
-                            ("Gemini 1.5 Flash (Legacy)", GeminiModel.LEGACY_FLASH.value)
-                        ],
-                        value=GeminiModel.PRO.value,
-                        label="AI Model Preference"
-                    )
+
+                    with gr.Group(visible=llm_enabled_by_default) as llm_controls:
+                        analysis_type = gr.Dropdown(
+                            choices=[
+                                ("Quality Analysis", "quality_analysis"),
+                                ("Structure Review", "structure_review"),
+                                ("Content Summary", "content_summary"),
+                                ("Extraction Quality", "extraction_quality")
+                            ],
+                            value="quality_analysis",
+                            label="Analysis Type",
+                            interactive=True
+                        )
+
+                        model_preference = gr.Dropdown(
+                            choices=[
+                                ("Gemini 2.0 Pro (Advanced Reasoning)", GeminiModel.PRO.value),
+                                ("Gemini 2.0 Flash (Fast Inference)", GeminiModel.FLASH.value),
+                                ("Gemini 2.5 Flash (Enhanced Quality)", GeminiModel.FLASH_25.value),
+                                ("Gemini 1.5 Pro (Legacy)", GeminiModel.LEGACY_PRO.value),
+                                ("Gemini 1.5 Flash (Legacy)", GeminiModel.LEGACY_FLASH.value)
+                            ],
+                            value=GeminiModel.PRO.value,
+                            label="AI Model Preference",
+                            interactive=True
+                        )
+
+                        gemini_api_key = gr.Textbox(
+                            label="Gemini API Key",
+                            type="password",
+                            value=self.default_gemini_key,
+                            placeholder="Enter your Google Gemini API key...",
+                            info="Key is read from .env by default. Provide a key here to override.",
+                            interactive=True
+                        )
                 
                 # Action buttons
                 with gr.Row():
@@ -689,9 +721,12 @@ class MarkItDownTestingApp:
         
         return {
             'file_upload': file_upload,
+            'enable_llm': enable_llm,
             'gemini_api_key': gemini_api_key,
             'analysis_type': analysis_type,
             'model_preference': model_preference,
+            'llm_status': llm_status,
+            'llm_controls': llm_controls,
             'process_btn': process_btn,
             'clear_btn': clear_btn,
             'status_display': status_display,
@@ -699,7 +734,46 @@ class MarkItDownTestingApp:
             'markdown_output': markdown_output,
             'quick_metrics': quick_metrics
         }
-    
+
+    def _build_llm_status_message(self, enabled: bool, key_present: bool) -> str:
+        """Create human-friendly status for LLM availability"""
+
+        if not enabled:
+            return "🔒 **AI Analysis Disabled.** Only conversion features are active."
+
+        if key_present:
+            return "🤖 **AI Analysis Enabled.** Gemini will execute using the configured API key."
+
+        return (
+            "⚠️ **AI Analysis Enabled but no API key detected.** "
+            "Add `GEMINI_API_KEY` to `.env` or provide it in the interface."
+        )
+
+    def _handle_llm_toggle(self, use_llm: bool, current_key: str):
+        """Update UI elements when the LLM toggle changes"""
+
+        current_key = current_key or ""
+
+        if use_llm:
+            resolved_key = current_key or self.default_gemini_key
+            key_update = gr.update(
+                value=resolved_key,
+                visible=True,
+                interactive=True
+            )
+            analysis_update = gr.update(visible=True, interactive=True)
+            model_update = gr.update(visible=True, interactive=True)
+            controls_update = gr.update(visible=True)
+            status_message = self._build_llm_status_message(True, bool(resolved_key))
+        else:
+            key_update = gr.update(visible=False, interactive=False)
+            analysis_update = gr.update(visible=False, interactive=False)
+            model_update = gr.update(visible=False, interactive=False)
+            controls_update = gr.update(visible=False)
+            status_message = self._build_llm_status_message(False, False)
+
+        return controls_update, key_update, analysis_update, model_update, status_message
+
     def _create_analytics_interface(self, gr_state: gr.State) -> Dict[str, Any]:
         """Analytics dashboard interface"""
         
@@ -760,12 +834,29 @@ class MarkItDownTestingApp:
         gr_state: gr.State
     ) -> None:
         """Wire event handlers with clean separation of concerns"""
-        
+
+        # Toggle LLM configuration visibility and defaults
+        processing_components['enable_llm'].change(
+            fn=self._handle_llm_toggle,
+            inputs=[
+                processing_components['enable_llm'],
+                processing_components['gemini_api_key']
+            ],
+            outputs=[
+                processing_components['llm_controls'],
+                processing_components['gemini_api_key'],
+                processing_components['analysis_type'],
+                processing_components['model_preference'],
+                processing_components['llm_status']
+            ]
+        )
+
         # Document processing handler
         processing_components['process_btn'].click(
             fn=self._handle_document_processing,
             inputs=[
                 processing_components['file_upload'],
+                processing_components['enable_llm'],
                 processing_components['gemini_api_key'],
                 processing_components['analysis_type'],
                 processing_components['model_preference'],
@@ -808,6 +899,7 @@ class MarkItDownTestingApp:
     async def _handle_document_processing(
         self,
         file_obj,
+        use_llm: bool,
         gemini_api_key: str,
         analysis_type: str,
         model_preference: str,
@@ -831,6 +923,18 @@ class MarkItDownTestingApp:
             return (*error_response, current_state)
         
         try:
+            llm_enabled = bool(use_llm)
+            resolved_api_key = None
+
+            if llm_enabled:
+                resolved_api_key = (gemini_api_key or self.default_gemini_key).strip()
+                if not resolved_api_key:
+                    warning_response = self.ui_factory.create_error_response(
+                        "Gemini analysis is enabled, but no API key was found. Add `GEMINI_API_KEY` to your .env file or "
+                        "enter a key in the interface, or disable AI analysis to continue with conversion only."
+                    )
+                    return (*warning_response, current_state)
+
             # Extract file content and metadata
             file_content = file_obj.read() if hasattr(file_obj, 'read') else file_obj
             if isinstance(file_content, str):
@@ -847,10 +951,14 @@ class MarkItDownTestingApp:
             processing_request = ProcessingRequest(
                 file_content=file_content,
                 file_metadata=file_metadata,
-                gemini_api_key=gemini_api_key.strip() if gemini_api_key else None,
+                gemini_api_key=resolved_api_key if llm_enabled else None,
                 analysis_type=analysis_type,
                 model_preference=model_preference,
-                session_context={'session_id': current_state.session_id}
+                use_llm=llm_enabled,
+                session_context={
+                    'session_id': current_state.session_id,
+                    'llm_enabled': llm_enabled
+                }
             )
             
             # Execute processing through orchestrator
