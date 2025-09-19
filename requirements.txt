@@ -2,7 +2,7 @@
 # Strategic dependency selection for enterprise-grade reliability
 
 # Core Framework Dependencies
-gradio>=4.44.0,<5.0.0                   # UI framework - aligned with production deployment
+gradio>=5.0.0                   # UI framework - aligned with production deployment
 markitdown[all]>=0.1.0                # Microsoft's document conversion engine
 
 # LLM Integration - Gemini Focus
