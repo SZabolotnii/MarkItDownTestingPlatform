@@ -218,7 +218,11 @@ async def process_document(file_path, api_key):
                 ],
                 "ai_analysis": {
                     "enabled": True,
-                    "models": ["gemini-1.5-pro", "gemini-1.5-flash"],
+                    "models": [
+                        "gemini-2.0-pro-exp",
+                        "gemini-2.0-flash-exp",
+                        "gemini-2.5-flash"
+                    ],
                     "analysis_types": [
                         "quality_analysis",
                         "structure_review", 

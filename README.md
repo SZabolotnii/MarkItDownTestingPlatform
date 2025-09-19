@@ -80,7 +80,7 @@ A comprehensive testing platform for Microsoft's MarkItDown document conversion 
 ```python
 gradio>=4.0.0                    # UI framework
 markitdown[all]>=0.1.0         # Document conversion
-google-generativeai>=0.3.0       # Gemini integration  
+google-genai>=0.1.0             # Gemini integration (new client)  
 plotly>=5.17.0                   # Interactive visualizations
 pandas>=1.5.0                    # Data processing
 ```

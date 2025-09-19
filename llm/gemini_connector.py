@@ -19,8 +19,9 @@ from typing import Dict, Any, List, Optional, Union, AsyncGenerator
 from dataclasses import dataclass, asdict
 from enum import Enum
 
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google import genai
+from google.genai import types
+from google.genai.types import HarmCategory, HarmBlockThreshold
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from pydantic import BaseModel, Field, validator, JsonValue
 
@@ -40,9 +41,37 @@ class AnalysisType(Enum):
 
 class GeminiModel(Enum):
     """Available Gemini models with strategic use case mapping"""
-    PRO = "gemini-1.5-pro"              # Complex analysis, reasoning
-    FLASH = "gemini-1.5-flash"          # Fast processing, summaries
-    PRO_VISION = "gemini-1.5-pro-vision"  # Multimodal content analysis
+
+    PRO = "gemini-2.0-pro-exp"              # Latest high-accuracy reasoning model
+    FLASH = "gemini-2.0-flash-exp"          # Latest high-speed model
+    FLASH_25 = "gemini-2.5-flash"           # Enhanced quality flash model
+    LEGACY_PRO = "gemini-1.5-pro"           # Legacy compatibility
+    LEGACY_FLASH = "gemini-1.5-flash"       # Legacy compatibility
+    PRO_VISION = "gemini-1.5-pro-vision"    # Multimodal content analysis
+
+    @classmethod
+    def from_str(cls, value: Union[str, "GeminiModel", None]) -> "GeminiModel":
+        """Resolve string input to an enum member with graceful fallbacks"""
+
+        if isinstance(value, cls):
+            return value
+
+        if value in (None, ""):
+            return cls.PRO
+
+        try:
+            return cls(value)
+        except ValueError as exc:
+            legacy_aliases = {
+                "gemini-1.5-pro": cls.LEGACY_PRO,
+                "gemini-1.5-flash": cls.LEGACY_FLASH,
+                "gemini-1.5-pro-vision": cls.PRO_VISION,
+            }
+
+            if value in legacy_aliases:
+                return legacy_aliases[value]
+
+            raise ValueError(f"Unsupported Gemini model: {value}") from exc
 
 
 @dataclass
@@ -54,16 +83,28 @@ class GeminiConfig:
     temperature: float = 0.1  # Low temperature for consistent analysis
     timeout_seconds: int = 60
     max_retry_attempts: int = 3
-    safety_settings: Optional[Dict] = None
+    safety_settings: Optional[List[types.SafetySetting]] = None
     
     def __post_init__(self):
         if self.safety_settings is None:
-            self.safety_settings = {
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            }
+            self.safety_settings = [
+                types.SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                ),
+                types.SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                ),
+                types.SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                ),
+                types.SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                ),
+            ]
 
 
 class AnalysisRequest(BaseModel):
@@ -80,6 +121,10 @@ class AnalysisRequest(BaseModel):
         if not v or len(v.strip()) < 10:
             raise ValueError("Content must be at least 10 characters long")
         return v
+
+    @validator('model', pre=True, always=True)
+    def validate_model(cls, value):
+        return GeminiModel.from_str(value)
 
 
 class AnalysisResponse(BaseModel):
@@ -241,7 +286,7 @@ class GeminiAnalysisEngine:
         """Initialize Gemini Analysis Engine with configuration"""
         
         self.config = config
-        self.client = None
+        self.client: Optional[genai.Client] = None
         self._initialize_client()
         
         # Performance tracking
@@ -256,11 +301,16 @@ class GeminiAnalysisEngine:
             raise ValueError("Gemini API key is required")
         
         try:
-            genai.configure(api_key=self.config.api_key)
-            # Test client initialization with a simple call
-            models = genai.list_models()
-            logging.info(f"Gemini client initialized successfully. Available models: {len(list(models))}")
-            
+            self.client = genai.Client(api_key=self.config.api_key)
+
+            # Optional warm-up to validate credentials without incurring generation cost
+            try:
+                _ = next(self.client.models.list(page_size=1), None)
+            except Exception as list_error:  # pragma: no cover - defensive logging
+                logging.debug(f"Model listing skipped: {list_error}")
+
+            logging.info("Gemini client (google-genai) initialized successfully")
+
         except Exception as e:
             logging.error(f"Failed to initialize Gemini client: {e}")
             raise
@@ -287,15 +337,15 @@ class GeminiAnalysisEngine:
         try:
             # Prepare analysis prompt
             prompt = self._build_analysis_prompt(request)
-            
+
             # Select optimal model for analysis type
-            model_name = self._select_optimal_model(request.analysis_type, request.model)
-            
+            model_enum = self._select_optimal_model(request.analysis_type, request.model)
+
             # Execute analysis
-            response = await self._execute_analysis(model_name, prompt)
-            
+            response_text = await self._execute_analysis(model_enum.value, prompt)
+
             # Parse and structure response
-            analysis_content = self._parse_analysis_response(response.text, request.analysis_type)
+            analysis_content = self._parse_analysis_response(response_text, request.analysis_type)
             
             processing_time = (datetime.now() - start_time).total_seconds()
             self.total_processing_time += processing_time
@@ -303,7 +353,7 @@ class GeminiAnalysisEngine:
             return AnalysisResponse(
                 success=True,
                 analysis_type=request.analysis_type,
-                model_used=GeminiModel(model_name),
+                model_used=model_enum,
                 content=analysis_content,
                 metadata={
                     'processing_time': processing_time,
@@ -353,9 +403,9 @@ class GeminiAnalysisEngine:
         
         return f"{system_context}\n\n{main_prompt}"
     
-    def _select_optimal_model(self, analysis_type: AnalysisType, requested_model: GeminiModel) -> str:
+    def _select_optimal_model(self, analysis_type: AnalysisType, requested_model: GeminiModel) -> GeminiModel:
         """Select optimal Gemini model based on analysis requirements"""
-        
+
         # Strategic model selection based on analysis complexity
         model_recommendations = {
             AnalysisType.QUALITY_ANALYSIS: GeminiModel.PRO,      # Complex reasoning
@@ -364,38 +414,67 @@ class GeminiAnalysisEngine:
             AnalysisType.COMPARATIVE_ANALYSIS: GeminiModel.PRO, # Complex comparison
             AnalysisType.EXTRACTION_QUALITY: GeminiModel.PRO,   # Detailed quality assessment
         }
-        
-        # Use recommended model unless specifically overridden
-        recommended_model = model_recommendations.get(analysis_type, requested_model)
-        return recommended_model.value
+
+        # Respect explicit model choices outside default presets
+        default_overrides = {GeminiModel.PRO, GeminiModel.FLASH}
+        if requested_model not in default_overrides:
+            return requested_model
+
+        return model_recommendations.get(analysis_type, requested_model)
     
-    async def _execute_analysis(self, model_name: str, prompt: str):
+    async def _execute_analysis(self, model_name: str, prompt: str) -> str:
         """Execute analysis using Gemini API with timeout and error handling"""
-        
+
+        if not self.client:
+            raise RuntimeError("Gemini client is not initialized")
+
+        def _run_generation() -> str:
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=prompt)],
+                )
+            ]
+
+            config_kwargs = {
+                "temperature": self.config.temperature,
+                "max_output_tokens": self.config.max_tokens,
+            }
+
+            if self.config.safety_settings:
+                config_kwargs["safety_settings"] = self.config.safety_settings
+
+            generation_config = types.GenerateContentConfig(**config_kwargs)
+
+            try:
+                stream = self.client.models.generate_content_stream(
+                    model=model_name,
+                    contents=contents,
+                    config=generation_config,
+                )
+
+                collected_chunks: List[str] = []
+                for chunk in stream:
+                    text_part = getattr(chunk, "text", None)
+                    if text_part:
+                        collected_chunks.append(text_part)
+
+                return "".join(collected_chunks)
+
+            except AttributeError:
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=generation_config,
+                )
+                return getattr(response, "text", getattr(response, "output_text", ""))
+
         try:
-            model = genai.GenerativeModel(
-                model_name=model_name,
-                safety_settings=self.config.safety_settings
+            return await asyncio.wait_for(
+                asyncio.to_thread(_run_generation),
+                timeout=self.config.timeout_seconds,
             )
-            
-            # Configure generation parameters
-            generation_config = genai.GenerationConfig(
-                max_output_tokens=self.config.max_tokens,
-                temperature=self.config.temperature,
-            )
-            
-            # Execute with timeout
-            response = await asyncio.wait_for(
-                asyncio.to_thread(
-                    model.generate_content,
-                    prompt,
-                    generation_config=generation_config
-                ),
-                timeout=self.config.timeout_seconds
-            )
-            
-            return response
-            
+
         except asyncio.TimeoutError:
             raise TimeoutError(f"Gemini API request timed out after {self.config.timeout_seconds} seconds")
         except Exception as e:
@@ -666,7 +745,7 @@ class GeminiConnectionManager:
 def create_analysis_request(
     content: str,
     analysis_type: str,
-    model: str = "gemini-1.5-pro",
+    model: str = GeminiModel.PRO.value,
     custom_instructions: Optional[str] = None
 ) -> AnalysisRequest:
     """Factory function for creating analysis requests"""
@@ -674,7 +753,7 @@ def create_analysis_request(
     return AnalysisRequest(
         content=content,
         analysis_type=AnalysisType(analysis_type),
-        model=GeminiModel(model),
+        model=GeminiModel.from_str(model),
         custom_instructions=custom_instructions
     )
 
