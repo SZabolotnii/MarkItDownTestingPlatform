@@ -529,7 +529,7 @@ class MarkItDownTestingApp:
                 )
 
                 with gr.Accordion("🔧 Processing Configuration", open=True):
-                    llm_enabled_by_default = bool(self.default_gemini_key)
+                    llm_enabled_by_default = False
 
                     enable_llm = gr.Checkbox(
                         label="Enable Gemini AI Analysis",
@@ -555,7 +555,6 @@ class MarkItDownTestingApp:
                             value="quality_analysis",
                             label="Analysis Type",
                             interactive=True,
-                            info="🚨 ВИПРАВЛЕНО: Тепер різні режими показуватимуть різні результати!"
                         )
 
                         model_preference = gr.Dropdown(
