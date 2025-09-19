@@ -341,11 +341,19 @@ class GeminiAnalysisEngine:
             # Select optimal model for analysis type
             model_enum = self._select_optimal_model(request.analysis_type, request.model)
 
-            # Execute analysis
-            response_text = await self._execute_analysis(model_enum.value, prompt)
+            response_text = await self._execute_with_fallbacks(
+                model_enum,
+                prompt,
+                request.analysis_type,
+            )
 
-            # Parse and structure response
-            analysis_content = self._parse_analysis_response(response_text, request.analysis_type)
+            model_enum = response_text["model_enum"]
+            raw_text = response_text["response_text"]
+
+            analysis_content = self._parse_analysis_response(
+                raw_text,
+                request.analysis_type,
+            )
             
             processing_time = (datetime.now() - start_time).total_seconds()
             self.total_processing_time += processing_time
@@ -415,12 +423,35 @@ class GeminiAnalysisEngine:
             AnalysisType.EXTRACTION_QUALITY: GeminiModel.PRO,   # Detailed quality assessment
         }
 
-        # Respect explicit model choices outside default presets
         default_overrides = {GeminiModel.PRO, GeminiModel.FLASH}
         if requested_model not in default_overrides:
             return requested_model
 
-        return model_recommendations.get(analysis_type, requested_model)
+        recommended = model_recommendations.get(analysis_type, requested_model)
+
+        if (
+            recommended == GeminiModel.PRO
+            and "flash" in requested_model.value
+        ):
+            logging.info(
+                "Switching analysis type %s to flash model %s due to user preference",
+                analysis_type,
+                requested_model,
+            )
+            return requested_model
+
+        if (
+            recommended == GeminiModel.FLASH
+            and "pro" in requested_model.value
+        ):
+            logging.info(
+                "Switching analysis type %s to pro model %s due to user preference",
+                analysis_type,
+                requested_model,
+            )
+            return requested_model
+
+        return recommended
     
     async def _execute_analysis(self, model_name: str, prompt: str) -> str:
         """Execute analysis using Gemini API with timeout and error handling"""
@@ -479,6 +510,59 @@ class GeminiAnalysisEngine:
             raise TimeoutError(f"Gemini API request timed out after {self.config.timeout_seconds} seconds")
         except Exception as e:
             raise RuntimeError(f"Gemini API error: {str(e)}")
+
+    async def _execute_with_fallbacks(
+        self,
+        initial_model: GeminiModel,
+        prompt: str,
+        analysis_type: AnalysisType,
+    ) -> Dict[str, Any]:
+        """Execute analysis with quota-aware fallbacks."""
+
+        attempted_models = []
+        model_enum = initial_model
+
+        while True:
+            attempted_models.append(model_enum)
+
+            try:
+                response_text = await self._execute_analysis(model_enum.value, prompt)
+                return {
+                    "response_text": response_text,
+                    "model_enum": model_enum,
+                }
+
+            except RuntimeError as exc:
+                error_text = str(exc)
+
+                if "RESOURCE_EXHAUSTED" in error_text:
+                    fallback_model = self._select_quota_fallback(model_enum)
+
+                    if fallback_model and fallback_model not in attempted_models:
+                        logging.warning(
+                            "Quota exceeded for model %s during %s analysis. Retrying with fallback %s",
+                            model_enum.value,
+                            analysis_type.value,
+                            fallback_model.value,
+                        )
+                        model_enum = fallback_model
+                        continue
+
+                raise
+
+    def _select_quota_fallback(self, current_model: GeminiModel) -> Optional[GeminiModel]:
+        """Determine fallback model when quota limits are encountered."""
+
+        if current_model == GeminiModel.PRO:
+            return GeminiModel.FLASH_25
+
+        if current_model == GeminiModel.FLASH_25:
+            return GeminiModel.FLASH
+
+        if current_model == GeminiModel.FLASH:
+            return GeminiModel.LEGACY_FLASH
+
+        return None
     
     def _parse_analysis_response(self, response_text: str, analysis_type: AnalysisType) -> JSONDict:
         """Parse and validate Gemini response into structured format"""

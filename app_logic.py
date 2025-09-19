@@ -202,10 +202,13 @@ class DocumentProcessingOrchestrator:
 
         try:
             gemini_config = GeminiConfig(api_key=request.gemini_api_key)
-            engine_id = await self.gemini_manager.create_engine(
-                request.gemini_api_key,
-                gemini_config,
-            )
+            try:
+                engine_id = await self.gemini_manager.create_engine(
+                    request.gemini_api_key,
+                    gemini_config,
+                )
+            except Exception as exc:
+                raise
 
             engine = self.gemini_manager.get_engine(engine_id)
             if not engine:
@@ -216,6 +219,12 @@ class DocumentProcessingOrchestrator:
                 content=conversion_result.content,
                 analysis_type=AnalysisType(request.analysis_type),
                 model=GeminiModel.from_str(request.model_preference),
+            )
+
+            logging.info(
+                "Executing Gemini analysis | Type: %s | Model: %s",
+                analysis_request.analysis_type,
+                analysis_request.model,
             )
 
             analysis_result = await engine.analyze_content(analysis_request)
