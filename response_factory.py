@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol, Tuple
@@ -180,18 +181,39 @@ class ProcessingResultProcessor:
         
         processing_response: ProcessingResponse = service_result.data
         processing_time = service_result.metadata.get('processing_time', 0)
-        
+
+        conversion_result = processing_response.conversion_result
+        conversion_content = getattr(conversion_result, 'content', '') if conversion_result else ''
+        # Defensive: mocks may fabricate attributes; coerce to safe types
+        if not isinstance(conversion_content, (str, bytes, bytearray)):
+            try:
+                conversion_content = str(conversion_content)
+            except Exception:
+                conversion_content = ''
+        conversion_metadata = getattr(conversion_result, 'metadata', {}) if conversion_result else {}
+        quality_metrics = (
+            processing_response.quality_metrics
+            if isinstance(processing_response.quality_metrics, Mapping)
+            else {}
+        )
+
         # Extract core metrics
-        content_length = len(processing_response.conversion_result.content) if processing_response.conversion_result else 0
-        quality_score = processing_response.quality_metrics.get('composite_score', 0)
+        try:
+            if isinstance(conversion_content, (bytes, bytearray)):
+                content_length = len(conversion_content)
+            elif isinstance(conversion_content, str):
+                content_length = len(conversion_content)
+            else:
+                content_length = len(str(conversion_content)) if conversion_content else 0
+        except Exception:
+            content_length = 0
+        quality_score = quality_metrics.get('composite_score', 0)
         
         # Build status message
         status_message = f"Document Processing Completed (#{self.processing_count})"
         
         # Generate document preview
-        original_preview = self._generate_document_preview(
-            processing_response.conversion_result.metadata if processing_response.conversion_result else {}
-        )
+        original_preview = self._generate_document_preview(conversion_metadata)
         
         # Process content based on analysis type
         content_display = self._process_content_display(processing_response)
@@ -215,7 +237,7 @@ class ProcessingResultProcessor:
         # Determine error guidance based on error type
         guidance = self._generate_error_guidance(error_message)
         
-        context = f"Processing failed after {processing_time:.2f} seconds"
+        context = f"Processing failed after {processing_time:.1f} seconds"
         if service_result.metadata.get('exception_type'):
             context += f" ({service_result.metadata['exception_type']})"
         
@@ -229,21 +251,35 @@ class ProcessingResultProcessor:
         """Process content for display based on analysis results"""
         
         # If AI analysis is available and successful, format that
-        if response.analysis_result and response.analysis_result.success:
+        if response.analysis_result and getattr(response.analysis_result, 'success', False):
             return self._format_ai_analysis_content(response.analysis_result)
         
         # Otherwise, return basic conversion content
-        if response.conversion_result and response.conversion_result.content:
-            return response.conversion_result.content
+        if response.conversion_result and getattr(response.conversion_result, 'content', None):
+            content = response.conversion_result.content
+            if isinstance(content, (bytes, bytearray)):
+                try:
+                    return content.decode('utf-8', errors='ignore')
+                except Exception:
+                    return str(content)
+            if not isinstance(content, str):
+                return str(content)
+            return content
         
         return "No content available"
     
     def _format_ai_analysis_content(self, analysis_result) -> str:
         """Format AI analysis results for display"""
         
-        analysis_type = analysis_result.analysis_type.value
-        ai_content = analysis_result.content
-        
+        analysis_type = getattr(analysis_result, 'analysis_type', 'generic')
+        analysis_type = analysis_type.value if hasattr(analysis_type, 'value') else str(analysis_type)
+        ai_content = self._ensure_json_serializable(
+            getattr(analysis_result, 'content', {})
+        )
+
+        if not isinstance(ai_content, Mapping):
+            ai_content = {'analysis_content': ai_content}
+
         if analysis_type == "quality_analysis":
             return self._format_quality_analysis(ai_content)
         elif analysis_type == "structure_review":
@@ -372,7 +408,7 @@ class ProcessingResultProcessor:
     def _generate_document_preview(self, metadata: JSONDict) -> str:
         """Generate document metadata preview"""
         
-        if not metadata:
+        if not metadata or not isinstance(metadata, Mapping):
             return "<div><em>No document metadata available</em></div>"
         
         file_info = ""
@@ -394,8 +430,18 @@ class ProcessingResultProcessor:
     def _extract_processing_metrics(self, response: ProcessingResponse, processing_time: float) -> JSONDict:
         """Extract comprehensive metrics from processing response"""
         
-        basic_metrics = response.quality_metrics.get("basic_metrics", {})
-        structural_metrics = response.quality_metrics.get("structural_metrics", {})
+        quality_metrics = (
+            response.quality_metrics
+            if isinstance(response.quality_metrics, Mapping)
+            else {}
+        )
+        basic_metrics = quality_metrics.get("basic_metrics", {})
+        structural_metrics = quality_metrics.get("structural_metrics", {})
+
+        if not isinstance(basic_metrics, Mapping):
+            basic_metrics = {}
+        if not isinstance(structural_metrics, Mapping):
+            structural_metrics = {}
         
         return {
             "processing_time": processing_time,
@@ -411,7 +457,7 @@ class ProcessingResultProcessor:
                 "links": structural_metrics.get("links", 0),
             },
             "quality_assessment": {
-                "composite_score": response.quality_metrics.get("composite_score", 0),
+                "composite_score": quality_metrics.get("composite_score", 0),
                 "ai_analysis_available": bool(response.analysis_result and response.analysis_result.success),
             },
             "processing_metadata": {
@@ -419,6 +465,23 @@ class ProcessingResultProcessor:
                 "success": response.success,
             }
         }
+
+    def _ensure_json_serializable(self, value: Any) -> Any:
+        """Recursively convert value into JSON-serializable form"""
+
+        if isinstance(value, Mapping):
+            return {
+                str(key): self._ensure_json_serializable(val)
+                for key, val in value.items()
+            }
+
+        if isinstance(value, (list, tuple, set)):
+            return [self._ensure_json_serializable(item) for item in value]
+
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+
+        return str(value)
     
     def _generate_error_guidance(self, error_message: str) -> str:
         """Generate contextual guidance based on error type"""

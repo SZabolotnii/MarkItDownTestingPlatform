@@ -204,11 +204,23 @@ class StandardDocumentProcessingService:
                 )
             else:
                 self.processing_metrics['failed_requests'] += 1
+                error_details = getattr(
+                    processing_response,
+                    'error_details',
+                    'Document processing failed'
+                )
+                error_context = getattr(
+                    processing_response,
+                    'processing_metadata',
+                    {}
+                ) or {}
+                if not isinstance(error_context, dict):
+                    error_context = {'details': error_context}
                 return ServiceResult.error(
-                    message=processing_response.error_details,
+                    message=error_details,
                     metadata={
                         'processing_time': processing_time,
-                        'error_context': processing_response.processing_metadata
+                        'error_context': error_context
                     }
                 )
                 
@@ -559,7 +571,8 @@ class PlatformServiceLayer:
         self.service_metrics = {
             'initialized_at': datetime.now().isoformat(),
             'total_service_calls': 0,
-            'service_call_distribution': {}
+            'service_call_distribution': {},
+            'service_call_count': 0,
         }
     
     async def process_document_with_analytics(
@@ -636,6 +649,7 @@ class PlatformServiceLayer:
             self.service_metrics['service_call_distribution'][method_name] = 0
         
         self.service_metrics['service_call_distribution'][method_name] += 1
+        self.service_metrics['service_call_count'] = self.service_metrics['total_service_calls']
 
 
 # ==================== FACTORY FUNCTIONS ====================
