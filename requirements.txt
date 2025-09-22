@@ -41,3 +41,5 @@ psutil>=5.9.0                           # System resource monitoring
 pytest>=7.0.0                           # Testing framework
 black>=23.0.0                           # Code formatting
 flake8>=6.0.0                           # Code linting
+pytest-cov>=4.0.0                       # Code coverage
+pytest-asyncio>=0.21.0                  # Async test support
