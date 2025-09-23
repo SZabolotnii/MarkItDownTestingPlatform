@@ -187,3 +187,7 @@ env/
 # System Files
 .DS_Store
 Thumbs.db
+
+# Local Development
+temp/
+tests/
